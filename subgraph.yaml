@@ -1,16 +1,18 @@
+
 specVersion: 0.0.4
-description: Ethereum Contract Tracking Subgraph (powered by Substreams)
+description: Solana Transaction Tracking Subgraph (powered by Substreams)
 repository: https://github.com/graphprotocol/graph-tooling
 schema:
   file: schema.graphql
 dataSources:
   - kind: substreams
-    name: substream_test
-    network: mainnet
+    name: substream_sol
+    network: solana-mainnet-beta
     source:
       package:
         moduleName: graph_out
-        file: substreams-test-v1.0.1.spkg
+        file: substreams-solana-quickstart-v1.0.0.spkg
+      startBlock: 153000128
     mapping:
       kind: substreams/graph-entities
       apiVersion: 0.0.5

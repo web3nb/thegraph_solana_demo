@@ -1,40 +1,36 @@
 mod pb;
 
-use pb::example::{Contract, Contracts};
-
-use substreams::Hex;
-use substreams_entity_change::pb::entity::EntityChanges;
-use substreams_entity_change::tables::Tables;
-use substreams_ethereum::pb::eth;
+use pb::sf::solana::block_meta::v1::BlockMeta;
+use substreams_database_change::pb::database::DatabaseChanges;
+use substreams_database_change::tables::Tables as DatabaseChangeTables;
+use substreams_solana::pb::sol;
 
 #[substreams::handlers::map]
-fn map_contract(block: eth::v2::Block) -> Result<Contracts, substreams::errors::Error> {
-    let contracts = block
-        .calls()
-        .filter(|view| !view.call.state_reverted)
-        .filter(|view| view.call.call_type == eth::v2::CallType::Create as i32)
-        .map(|view| Contract {
-            address: format!("0x{}", Hex(&view.call.address)),
-            block_number: block.number,
-            timestamp: block.timestamp_seconds().to_string(),
-            ordinal: view.call.begin_ordinal,
-        })
-        .collect();
+fn map_block(block: sol::v1::Block) -> Result<BlockMeta, substreams::errors::Error> {
+    let mut block_height: Option<u64> = None;
+    if let Some(v) = block.block_height.as_ref() {
+        block_height = Some(v.block_height)
+    }
 
-    Ok(Contracts { contracts })
+    Ok(BlockMeta {
+        hash: block.blockhash.to_string(),
+        parent_hash: block.previous_blockhash.to_string(),
+        slot: block.slot,
+        parent_slot: block.parent_slot,
+        transaction_count: block.transactions.len() as u64,
+        block_height,
+    })
 }
 
 #[substreams::handlers::map]
-pub fn graph_out(contracts: Contracts) -> Result<EntityChanges, substreams::errors::Error> {
-    // hash map of name to a table
-    let mut tables = Tables::new();
+fn db_out(bm: BlockMeta) -> Result<DatabaseChanges, substreams::errors::Error> {
+    // Initialize changes container
+    let mut tables = DatabaseChangeTables::new();
 
-    for contract in contracts.contracts.into_iter() {
-        tables
-            .create_row("Contract", contract.address)
-            .set("timestamp", contract.timestamp)
-            .set("blockNumber", contract.block_number);
-    }
-
-    Ok(tables.to_entity_changes())
+    tables
+        .create_row("block", [("hash", bm.hash)])
+        .set("parent_hash", bm.parent_hash)
+        .set("block_height", bm.slot)
+        .set("transaction_count", bm.transaction_count);
+    Ok(tables.to_database_changes())
 }
